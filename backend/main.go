@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -25,6 +26,7 @@ import (
 )
 
 // Since main.go is in backend/server/ and migrations are in backend/migrations/, look up one level.
+//go:embed migrations/*.sql
 var migrationFiles embed.FS
 
 func main() {
@@ -120,19 +122,26 @@ func main() {
 }
 
 func runMigrations(dbURL string) error {
-	d, err := iofs.New(migrationFiles, "../migrations")
+	d, err := iofs.New(migrationFiles, "migrations")
 	if err != nil {
 		return fmt.Errorf("failed to create iofs driver: %w", err)
 	}
 
-	// Initialize the migrator instance
-	m, err := migrate.NewWithSourceInstance("iofs", d, dbURL)
+	// Replace postgres:// or postgresql:// with pgx5:// so golang-migrate routes it to the right driver
+	migratorURL := dbURL
+	if strings.HasPrefix(migratorURL, "postgres://") {
+		migratorURL = strings.Replace(migratorURL, "postgres://", "pgx5://", 1)
+	} else if strings.HasPrefix(migratorURL, "postgresql://") {
+		migratorURL = strings.Replace(migratorURL, "postgresql://", "pgx5://", 1)
+	}
+
+	// Pass the converted migratorURL instead of dbURL
+	m, err := migrate.NewWithSourceInstance("iofs", d, migratorURL)
 	if err != nil {
 		return fmt.Errorf("failed to initialize migrator: %w", err)
 	}
 	defer m.Close()
 
-	// Run all 'Up' migrations
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("failed to apply migrations: %w", err)
 	}

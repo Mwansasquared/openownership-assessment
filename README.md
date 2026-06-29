@@ -148,10 +148,10 @@ The transition map lives entirely in [`backend/internal/workflow/state_managemen
 │   │       ├── state_managament.go      # Transition(), AllowedActions(), RoleCanAct()
 │   │       └── state_managament_test.go # 32 table-driven tests
 │   ├── migrations/
-│   │   ├── 001_create_users.sql
-│   │   ├── 002_create_submissions.sql
-│   │   ├── 003_create_submission_events.sql
-│   │   └── 004_seed_users.sql        # One user per role (password: password123)
+│   │   ├── 001_create_users.up.sql
+│   │   ├── 002_create_submissions.up.sql
+│   │   ├── 003_create_submission_events.up.sql
+│   │   └── 004_seed_users.up.sql     # One user per role (password: password123)
 │   ├── .env                          # Local config (git-ignored)
 │   ├── .env.example
 │   ├── Dockerfile
@@ -417,7 +417,6 @@ psql "$DATABASE_URL" \
 |---|---|
 | `VITE_API_BASE_URL` | Your Railway backend URL, e.g. `https://your-backend.railway.app` |
 
-4. The [`vercel.json`](frontend/vercel.json) rewrite rule handles React Router client-side navigation.
 
 > **Cookie note**: In production the frontend and backend are on different origins, so the auth cookie must have `SameSite=None; Secure` set in `auth_handler.go`. Railway provides HTTPS automatically.
 
