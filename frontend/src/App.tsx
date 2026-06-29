@@ -4,7 +4,6 @@ import { AuthContext } from './hooks/useAuth'
 import { useTheme, type Theme } from './hooks/useTheme'
 import { authApi } from './api/auth'
 import { LoginPage } from './pages/LoginPage'
-import { RegisterPage } from './pages/RegisterPage'
 import { SubmissionsPage } from './pages/SubmissionsPage'
 import { SubmissionDetailPage } from './pages/SubmissionDetailPage'
 import type { User } from './types'
@@ -245,8 +244,8 @@ export default function App() {
         <Nav user={user} theme={theme} onLogout={handleLogout} onToggleTheme={toggle} />
         <div style={{ position: 'relative', zIndex: 10, paddingTop: 56 }}>
           <Routes>
-            <Route path="/login"           element={<LoginPage />} />
-            <Route path="/register"        element={<RegisterPage />} />
+            <Route path="/login"    element={<LoginPage />} />
+            <Route path="/register" element={<Navigate to="/login" replace />} />
             <Route path="/submissions"     element={<RequireAuth><SubmissionsPage /></RequireAuth>} />
             <Route path="/submissions/:id" element={<RequireAuth><SubmissionDetailPage /></RequireAuth>} />
             <Route path="*"                element={<Navigate to="/submissions" replace />} />

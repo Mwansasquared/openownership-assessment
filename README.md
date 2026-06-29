@@ -1,6 +1,6 @@
 # Business Registration Portal
 
-A full-stack application for submitting and tracking applications (a business registration use case has been used) through a structured multi-stage approval pipeline.
+This project is a full-stack application for submitting, tracking applications and reviewing(i.e. approving and rejecting). A business registration use case has been used to demonstrate the submission and approval task through a structured multi-stage approval pipeline.
 
 ---
 
@@ -8,6 +8,7 @@ A full-stack application for submitting and tracking applications (a business re
 
 - [Overview](#overview)
 - [Tech Stack](#tech-stack)
+- [Tools Used](#tools-used)
 - [Architecture](#architecture)
 - [Application Status Flow](#application-status-flow)
 - [Project Structure](#project-structure)
@@ -23,7 +24,7 @@ A full-stack application for submitting and tracking applications (a business re
 
 ## Overview
 
-Business owners (**applicants**) create and manage registration applications that move through a defined approval lifecycle. Registry officers (**reviewers**) drive the review and approval process. Every state change — including edits and creation — is recorded in an append-only audit trail so the full history of every application is permanently available.
+The project shows a workflow were Business owners (**applicants**) create and manage registration applications that move through a defined approval lifecycle (submission). Registry officers (**reviewers**) drive the review and approval process. Every status change — including edits and creation — is recorded in an append-only audit trail so the full history of every application is permanently available.
 
 **Roles**
 
@@ -48,6 +49,12 @@ Business owners (**applicants**) create and manage registration applications tha
 | Frontend hosting | [Vercel](https://vercel.com) |
 
 ---
+
+## Tools Used
+The tools used in developing this project are:
+- VS Code: was used to write, edit, debug the code and review the code.
+- PgAdmin: was used as a graphical user interface(GUI) for database management.
+- Claude: was used to scaffold, generate tests, debug, and partly scaffold the docs
 
 ## Architecture
 
@@ -138,8 +145,8 @@ The transition map lives entirely in [`backend/internal/workflow/state_managemen
 │   │   │   ├── user_repo.go          # FindByEmail, FindByID, Create
 │   │   │   └── submission_repo.go    # CRUD + atomic Transition + event logging (tx)
 │   │   └── workflow/
-│   │       ├── state_machine.go      # Transition(), AllowedActions(), RoleCanAct()
-│   │       └── state_machine_test.go # 32 table-driven tests
+│   │       ├── state_managament.go      # Transition(), AllowedActions(), RoleCanAct()
+│   │       └── state_managament_test.go # 32 table-driven tests
 │   ├── migrations/
 │   │   ├── 001_create_users.sql
 │   │   ├── 002_create_submissions.sql
@@ -360,7 +367,7 @@ cd backend
 go test ./...
 ```
 
-The state machine test suite (`internal/workflow/state_machine_test.go`) covers:
+The status management test suite (`internal/workflow/status_management_test.go`) covers:
 
 - All valid transitions in the happy path (11 cases)
 - Every illegal transition

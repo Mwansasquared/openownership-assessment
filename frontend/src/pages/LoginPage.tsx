@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { useAuth } from '../hooks/useAuth'
 import { AuthCard } from '../components/AuthCard'
@@ -54,7 +54,7 @@ export function LoginPage() {
         color: 'var(--text-muted)', marginBottom: 32,
         lineHeight: 1.6,
       }}>
-        Sign in to manage your submissions or review pending work.
+        Sign in with your assigned credentials to manage applications or review pending registrations.
       </p>
 
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
@@ -104,15 +104,6 @@ export function LoginPage() {
         </button>
       </form>
 
-      <p style={{
-        marginTop: 24, fontSize: 12,
-        color: 'var(--text-muted)',
-      }}>
-        No account?{' '}
-        <Link to="/register" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-          Register
-        </Link>
-      </p>
     </AuthCard>
   )
 }
