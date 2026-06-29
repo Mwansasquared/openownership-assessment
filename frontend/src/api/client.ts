@@ -1,7 +1,12 @@
-const BASE = '/api'
+const BASE = import.meta.env.VITE_API_URL || '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  // Ensure there are no double-slash paths if VITE_API_URL has a trailing slash
+  const url = BASE.endsWith('/') && path.startsWith('/') 
+    ? `${BASE}${path.slice(1)}` 
+    : `${BASE}${path}`
+
+  const res = await fetch(url, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...init?.headers },
     ...init,

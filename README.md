@@ -394,7 +394,6 @@ PASS    github.com/openownership/assessment/internal/workflow
 |---|---|
 | `DATABASE_URL` | Provided automatically by the Railway PostgreSQL plugin |
 | `JWT_SECRET` | A long random string (`openssl rand -hex 32`) |
-| `FRONTEND_ORIGIN` | Your Vercel deployment URL, e.g. `https://your-app.vercel.app` |
 
 4. Run migrations against the Railway database:
 
