@@ -329,7 +329,7 @@ cp backend/.env.example backend/.env
 # Edit .env: set DATABASE_URL and JWT_SECRET
 
 cd backend
-go run ./server
+go run main.go
 ```
 
 Server starts on `http://localhost:8080`.
