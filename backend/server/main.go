@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +13,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/openownership/assessment/internal/auth"
@@ -18,6 +23,9 @@ import (
 	"github.com/openownership/assessment/internal/model"
 	"github.com/openownership/assessment/internal/repository"
 )
+
+// Since main.go is in backend/server/ and migrations are in backend/migrations/, look up one level.
+var migrationFiles embed.FS
 
 func main() {
 	// Load .env if present; silently ignored in production where env vars are set directly.
@@ -29,6 +37,14 @@ func main() {
 	jwtSecret := mustEnv("JWT_SECRET")
 	port := envOr("PORT", "8080")
 	frontendOrigin := envOr("FRONTEND_ORIGIN", "http://localhost:5173")
+
+	// Run Database Migrations first
+	logger.Info("running database migrations...")
+	if err := runMigrations(dbURL); err != nil {
+		logger.Error("migration pipeline failed", "err", err)
+		os.Exit(1)
+	}
+	logger.Info("database migrations completed successfully")
 
 	pool, err := pgxpool.New(context.Background(), dbURL)
 	if err != nil {
@@ -55,12 +71,15 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
+
+	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   []string{frontendOrigin},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization", "Accept", "X-Requested-With"},
 		AllowCredentials: true,
-	}))
+		Debug:            true,
+		MaxAge:           300,
+	})
 
 	r.Route("/api", func(r chi.Router) {
 		// Public auth routes
@@ -93,10 +112,32 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", port)
 	logger.Info("starting server", "addr", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+	
+	if err := http.ListenAndServe(addr, corsHandler.Handler(r)); err != nil {
 		logger.Error("server error", "err", err)
 		os.Exit(1)
 	}
+}
+
+func runMigrations(dbURL string) error {
+	d, err := iofs.New(migrationFiles, "../migrations")
+	if err != nil {
+		return fmt.Errorf("failed to create iofs driver: %w", err)
+	}
+
+	// Initialize the migrator instance
+	m, err := migrate.NewWithSourceInstance("iofs", d, dbURL)
+	if err != nil {
+		return fmt.Errorf("failed to initialize migrator: %w", err)
+	}
+	defer m.Close()
+
+	// Run all 'Up' migrations
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("failed to apply migrations: %w", err)
+	}
+
+	return nil
 }
 
 func mustEnv(key string) string {
