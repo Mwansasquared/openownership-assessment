@@ -8,7 +8,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const res = await fetch(url, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      ...init?.headers 
+    },
     ...init,
   })
   if (!res.ok) {
