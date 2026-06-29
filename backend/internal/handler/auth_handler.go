@@ -94,6 +94,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:	  true,
 		SameSite: http.SameSiteNoneMode,
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
@@ -118,6 +119,7 @@ func (h *AuthHandler) setTokenCookie(w http.ResponseWriter, user *model.User) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:	  true,
 		SameSite: http.SameSiteNoneMode,
 		MaxAge:   int((24 * time.Hour).Seconds()),
 	})

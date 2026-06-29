@@ -7,6 +7,7 @@ This project is a full-stack application for submitting, tracking applications a
 ## Table of Contents
 
 - [Overview](#overview)
+- [Live Demo](#live-demo)
 - [Tech Stack](#tech-stack)
 - [Tools Used](#tools-used)
 - [Architecture](#architecture)
@@ -36,6 +37,15 @@ The project shows a workflow were Business owners (**applicants**) create and ma
 
 ---
 
+## Live Demo
+
+| Service | URL |
+|---|---|
+| Frontend | [https://frontend-production-b018.up.railway.app/login](https://frontend-production-b018.up.railway.app/login) |
+| Backend API | [https://backend-production-22d3.up.railway.app](https://backend-production-22d3.up.railway.app) |
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -45,8 +55,7 @@ The project shows a workflow were Business owners (**applicants**) create and ma
 | Auth | JWT (HS256) stored in `httpOnly` cookies |
 | Frontend | React 19, Vite 6, TypeScript 5.8, React Router v7 |
 | Theming | CSS custom properties, `localStorage` + `prefers-color-scheme` |
-| Backend hosting | [Railway](https://railway.app) (Docker) |
-| Frontend hosting | [Vercel](https://vercel.com) |
+| Hosting | [Railway](https://railway.app) (frontend, backend, and database) |
 
 ---
 
@@ -181,7 +190,6 @@ The transition map lives entirely in [`backend/internal/workflow/state_managemen
     │   ├── App.tsx                   # Router, AuthContext provider, nav, theme toggle
     │   ├── main.tsx
     │   └── vite-env.d.ts
-    ├── vercel.json                   # SPA fallback rewrite rule
     ├── vite.config.ts                # Dev proxy → localhost:8080
     └── package.json
 ```
@@ -407,16 +415,17 @@ psql "$DATABASE_URL" \
 
 > The `DATABASE_URL` env var set in Railway is picked up automatically at runtime; `godotenv` only reads from `.env` when the file is present (it is not present in the Docker image).
 
-### Frontend → Vercel
+### Frontend → Railway
 
-1. Import the repository into Vercel; set **Root Directory** to `frontend`.
-2. Build command: `npm run build` — Output directory: `dist`.
+1. Create a new Railway service pointing to the `frontend/` directory.
+2. Set the start command to `npm run build && npx serve dist` (or use a static file server of your choice).
 3. Add the environment variable:
 
 | Variable | Value |
 |---|---|
-| `VITE_API_BASE_URL` | Your Railway backend URL, e.g. `https://your-backend.railway.app` |
+| `VITE_API_BASE_URL` | Your Railway backend URL, e.g. `https://backend-production-22d3.up.railway.app` |
 
+The live frontend is deployed at [https://frontend-production-b018.up.railway.app](https://frontend-production-b018.up.railway.app).
 
 > **Cookie note**: In production the frontend and backend are on different origins, so the auth cookie must have `SameSite=SameSiteNoneMode; Secure` set in `auth_handler.go`. Railway provides HTTPS automatically.
 
