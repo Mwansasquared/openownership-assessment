@@ -418,7 +418,7 @@ psql "$DATABASE_URL" \
 | `VITE_API_BASE_URL` | Your Railway backend URL, e.g. `https://your-backend.railway.app` |
 
 
-> **Cookie note**: In production the frontend and backend are on different origins, so the auth cookie must have `SameSite=None; Secure` set in `auth_handler.go`. Railway provides HTTPS automatically.
+> **Cookie note**: In production the frontend and backend are on different origins, so the auth cookie must have `SameSite=SameSiteNoneMode; Secure` set in `auth_handler.go`. Railway provides HTTPS automatically.
 
 ---
 
