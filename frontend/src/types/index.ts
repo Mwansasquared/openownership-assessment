@@ -12,9 +12,22 @@ export type Action =
   | 'start_review'
   | 'approve'
   | 'reject'
+  | 'return_for_changes'
   | 'resubmit'
   | 'create'
   | 'update'
+
+export const CATEGORIES = [
+  'technology',
+  'retail',
+  'manufacturing',
+  'services',
+  'healthcare',
+  'finance',
+  'other',
+] as const
+
+export type Category = (typeof CATEGORIES)[number]
 
 export interface User {
   id: string
@@ -29,9 +42,20 @@ export interface Submission {
   owner_email: string
   title: string
   content: string
+  category: Category
+  registration_date: string
   state: Status
   created_at: string
   updated_at: string
+}
+
+export interface Notification {
+  id: string
+  user_id: string
+  submission_id: string
+  message: string
+  read: boolean
+  created_at: string
 }
 
 export interface SubmissionEvent {

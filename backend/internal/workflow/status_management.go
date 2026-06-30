@@ -19,8 +19,9 @@ var transitionMap = map[model.State]map[model.Action]model.State{
 		model.ActionStartReview: model.StateUnderReview,
 	},
 	model.StateUnderReview: {
-		model.ActionApprove: model.StateApproved,
-		model.ActionReject:  model.StateRejected,
+		model.ActionApprove:          model.StateApproved,
+		model.ActionReject:           model.StateRejected,
+		model.ActionReturnForChanges: model.StateDraft, // sends back to DRAFT so the applicant can edit
 	},
 	model.StateRejected: {
 		model.ActionResubmit: model.StateSubmitted,
@@ -64,7 +65,7 @@ func RoleCanAct(role model.Role, action model.Action) bool {
 	switch action {
 	case model.ActionSubmit, model.ActionResubmit:
 		return role == model.RoleSubmitter || role == model.RoleAdmin
-	case model.ActionStartReview, model.ActionApprove, model.ActionReject:
+	case model.ActionStartReview, model.ActionApprove, model.ActionReject, model.ActionReturnForChanges:
 		return role == model.RoleReviewer || role == model.RoleAdmin
 	default:
 		return false

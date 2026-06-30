@@ -19,25 +19,33 @@ const (
 type Action string
 
 const (
-	ActionSubmit      Action = "submit"
-	ActionStartReview Action = "start_review"
-	ActionApprove     Action = "approve"
-	ActionReject      Action = "reject"
-	ActionResubmit    Action = "resubmit"
+	ActionSubmit           Action = "submit"
+	ActionStartReview      Action = "start_review"
+	ActionApprove          Action = "approve"
+	ActionReject           Action = "reject"
+	ActionReturnForChanges Action = "return_for_changes"
+	ActionResubmit         Action = "resubmit"
 	// Non-transition actions logged for full audit coverage.
 	ActionCreate Action = "create"
 	ActionUpdate Action = "update"
 )
 
+// ValidCategories is the fixed list applicants choose from.
+var ValidCategories = []string{
+	"technology", "retail", "manufacturing", "services", "healthcare", "finance", "other",
+}
+
 type Submission struct {
-	ID         uuid.UUID `json:"id"          db:"id"`
-	UserID     uuid.UUID `json:"user_id"     db:"user_id"`
-	OwnerEmail string    `json:"owner_email" db:"owner_email"`
-	Title      string    `json:"title"       db:"title"`
-	Content    string    `json:"content"     db:"content"`
-	State      State     `json:"state"       db:"state"`
-	CreatedAt  time.Time `json:"created_at"  db:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"  db:"updated_at"`
+	ID               uuid.UUID `json:"id"                db:"id"`
+	UserID           uuid.UUID `json:"user_id"           db:"user_id"`
+	OwnerEmail       string    `json:"owner_email"       db:"owner_email"`
+	Title            string    `json:"title"             db:"title"`
+	Content          string    `json:"content"           db:"content"`
+	Category         string    `json:"category"          db:"category"`
+	RegistrationDate string    `json:"registration_date" db:"registration_date"`
+	State            State     `json:"state"             db:"state"`
+	CreatedAt        time.Time `json:"created_at"        db:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"        db:"updated_at"`
 }
 
 type SubmissionEvent struct {

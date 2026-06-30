@@ -10,6 +10,18 @@ import (
 	"github.com/openownership/assessment/internal/model"
 )
 
+// SubmissionRepository is the interface handlers depend on, enabling mock testing.
+type SubmissionRepository interface {
+	Create(ctx context.Context, userID uuid.UUID, title, content, category, registrationDate string) (*model.Submission, error)
+	FindByID(ctx context.Context, id uuid.UUID) (*model.Submission, error)
+	ListForUser(ctx context.Context, userID uuid.UUID) ([]*model.Submission, error)
+	ListAll(ctx context.Context, stateFilter string) ([]*model.Submission, error)
+	UpdateDraft(ctx context.Context, id, actorID uuid.UUID, title, content, category, registrationDate string) (*model.Submission, error)
+	Transition(ctx context.Context, submissionID, actorID uuid.UUID, action model.Action, from, to model.State, comment string) (*model.Submission, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	ListEvents(ctx context.Context, submissionID uuid.UUID) ([]*model.SubmissionEvent, error)
+}
+
 type SubmissionRepo struct {
 	db *pgxpool.Pool
 }
@@ -17,7 +29,7 @@ type SubmissionRepo struct {
 func NewSubmissionRepo(db *pgxpool.Pool) *SubmissionRepo { return &SubmissionRepo{db: db} }
 
 // Create inserts the submission and atomically appends the initial "create" audit event.
-func (r *SubmissionRepo) Create(ctx context.Context, userID uuid.UUID, title, content string) (*model.Submission, error) {
+func (r *SubmissionRepo) Create(ctx context.Context, userID uuid.UUID, title, content, category, registrationDate string) (*model.Submission, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -27,16 +39,17 @@ func (r *SubmissionRepo) Create(ctx context.Context, userID uuid.UUID, title, co
 	s := &model.Submission{}
 	err = tx.QueryRow(ctx,
 		`WITH ins AS (
-		   INSERT INTO submissions (user_id, title, content)
-		   VALUES ($1, $2, $3)
-		   RETURNING id, user_id, title, content, state, created_at, updated_at
+		   INSERT INTO submissions (user_id, title, content, category, registration_date)
+		   VALUES ($1, $2, $3, $4, $5)
+		   RETURNING id, user_id, title, content, category, registration_date, state, created_at, updated_at
 		 )
-		 SELECT ins.id, ins.user_id, u.email, ins.title, ins.content,
-		        ins.state, ins.created_at, ins.updated_at
+		 SELECT ins.id, ins.user_id, u.email, ins.title, ins.content, ins.category,
+		        ins.registration_date::text, ins.state, ins.created_at, ins.updated_at
 		 FROM ins
 		 JOIN users u ON u.id = ins.user_id`,
-		userID, title, content,
-	).Scan(&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.State, &s.CreatedAt, &s.UpdatedAt)
+		userID, title, content, category, registrationDate,
+	).Scan(&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.Category,
+		&s.RegistrationDate, &s.State, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -56,12 +69,14 @@ func (r *SubmissionRepo) Create(ctx context.Context, userID uuid.UUID, title, co
 func (r *SubmissionRepo) FindByID(ctx context.Context, id uuid.UUID) (*model.Submission, error) {
 	s := &model.Submission{}
 	err := r.db.QueryRow(ctx,
-		`SELECT s.id, s.user_id, u.email, s.title, s.content, s.state, s.created_at, s.updated_at
+		`SELECT s.id, s.user_id, u.email, s.title, s.content, s.category,
+		        s.registration_date::text, s.state, s.created_at, s.updated_at
 		 FROM submissions s
 		 JOIN users u ON u.id = s.user_id
 		 WHERE s.id = $1`,
 		id,
-	).Scan(&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.State, &s.CreatedAt, &s.UpdatedAt)
+	).Scan(&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.Category,
+		&s.RegistrationDate, &s.State, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -74,7 +89,8 @@ func (r *SubmissionRepo) FindByID(ctx context.Context, id uuid.UUID) (*model.Sub
 // ListForUser returns submissions owned by a specific user.
 func (r *SubmissionRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]*model.Submission, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT s.id, s.user_id, u.email, s.title, s.content, s.state, s.created_at, s.updated_at
+		`SELECT s.id, s.user_id, u.email, s.title, s.content, s.category,
+		        s.registration_date::text, s.state, s.created_at, s.updated_at
 		 FROM submissions s
 		 JOIN users u ON u.id = s.user_id
 		 WHERE s.user_id = $1
@@ -88,14 +104,30 @@ func (r *SubmissionRepo) ListForUser(ctx context.Context, userID uuid.UUID) ([]*
 	return scanSubmissions(rows)
 }
 
-// ListAll returns every submission (reviewer/admin view).
-func (r *SubmissionRepo) ListAll(ctx context.Context) ([]*model.Submission, error) {
-	rows, err := r.db.Query(ctx,
-		`SELECT s.id, s.user_id, u.email, s.title, s.content, s.state, s.created_at, s.updated_at
-		 FROM submissions s
-		 JOIN users u ON u.id = s.user_id
-		 ORDER BY s.created_at DESC`,
-	)
+// ListAll returns submissions for reviewer/admin, optionally filtered by state.
+func (r *SubmissionRepo) ListAll(ctx context.Context, stateFilter string) ([]*model.Submission, error) {
+	var rows pgx.Rows
+	var err error
+
+	if stateFilter != "" {
+		rows, err = r.db.Query(ctx,
+			`SELECT s.id, s.user_id, u.email, s.title, s.content, s.category,
+			        s.registration_date::text, s.state, s.created_at, s.updated_at
+			 FROM submissions s
+			 JOIN users u ON u.id = s.user_id
+			 WHERE s.state = $1
+			 ORDER BY s.created_at DESC`,
+			stateFilter,
+		)
+	} else {
+		rows, err = r.db.Query(ctx,
+			`SELECT s.id, s.user_id, u.email, s.title, s.content, s.category,
+			        s.registration_date::text, s.state, s.created_at, s.updated_at
+			 FROM submissions s
+			 JOIN users u ON u.id = s.user_id
+			 ORDER BY s.created_at DESC`,
+		)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +135,8 @@ func (r *SubmissionRepo) ListAll(ctx context.Context) ([]*model.Submission, erro
 	return scanSubmissions(rows)
 }
 
-// UpdateDraft updates title/content for a DRAFT and appends an "update" audit event.
-func (r *SubmissionRepo) UpdateDraft(ctx context.Context, id, actorID uuid.UUID, title, content string) (*model.Submission, error) {
+// UpdateDraft updates fields for a DRAFT and appends an "update" audit event.
+func (r *SubmissionRepo) UpdateDraft(ctx context.Context, id, actorID uuid.UUID, title, content, category, registrationDate string) (*model.Submission, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -114,16 +146,17 @@ func (r *SubmissionRepo) UpdateDraft(ctx context.Context, id, actorID uuid.UUID,
 	s := &model.Submission{}
 	err = tx.QueryRow(ctx,
 		`WITH upd AS (
-		   UPDATE submissions SET title = $2, content = $3
+		   UPDATE submissions SET title = $2, content = $3, category = $4, registration_date = $5
 		   WHERE id = $1 AND state = 'DRAFT'
-		   RETURNING id, user_id, title, content, state, created_at, updated_at
+		   RETURNING id, user_id, title, content, category, registration_date, state, created_at, updated_at
 		 )
-		 SELECT upd.id, upd.user_id, u.email, upd.title, upd.content,
-		        upd.state, upd.created_at, upd.updated_at
+		 SELECT upd.id, upd.user_id, u.email, upd.title, upd.content, upd.category,
+		        upd.registration_date::text, upd.state, upd.created_at, upd.updated_at
 		 FROM upd
 		 JOIN users u ON u.id = upd.user_id`,
-		id, title, content,
-	).Scan(&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.State, &s.CreatedAt, &s.UpdatedAt)
+		id, title, content, category, registrationDate,
+	).Scan(&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.Category,
+		&s.RegistrationDate, &s.State, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -162,14 +195,15 @@ func (r *SubmissionRepo) Transition(
 		`WITH upd AS (
 		   UPDATE submissions SET state = $2
 		   WHERE id = $1 AND state = $3
-		   RETURNING id, user_id, title, content, state, created_at, updated_at
+		   RETURNING id, user_id, title, content, category, registration_date, state, created_at, updated_at
 		 )
-		 SELECT upd.id, upd.user_id, u.email, upd.title, upd.content,
-		        upd.state, upd.created_at, upd.updated_at
+		 SELECT upd.id, upd.user_id, u.email, upd.title, upd.content, upd.category,
+		        upd.registration_date::text, upd.state, upd.created_at, upd.updated_at
 		 FROM upd
 		 JOIN users u ON u.id = upd.user_id`,
 		submissionID, to, from,
-	).Scan(&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.State, &s.CreatedAt, &s.UpdatedAt)
+	).Scan(&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.Category,
+		&s.RegistrationDate, &s.State, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -237,8 +271,8 @@ func scanSubmissions(rows pgx.Rows) ([]*model.Submission, error) {
 	for rows.Next() {
 		s := &model.Submission{}
 		if err := rows.Scan(
-			&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content,
-			&s.State, &s.CreatedAt, &s.UpdatedAt,
+			&s.ID, &s.UserID, &s.OwnerEmail, &s.Title, &s.Content, &s.Category,
+			&s.RegistrationDate, &s.State, &s.CreatedAt, &s.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

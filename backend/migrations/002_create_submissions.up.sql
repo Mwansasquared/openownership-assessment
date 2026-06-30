@@ -3,6 +3,9 @@ CREATE TABLE submissions (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title      TEXT        NOT NULL,
     content    TEXT        NOT NULL,
+    category          TEXT        NOT NULL DEFAULT 'other'
+                               CHECK (category IN ('technology','retail','manufacturing','services','healthcare','finance','other')),
+    registration_date DATE        NOT NULL DEFAULT CURRENT_DATE,
     state      TEXT        NOT NULL DEFAULT 'DRAFT'
                            CHECK (state IN ('DRAFT','SUBMITTED','UNDER_REVIEW','APPROVED','REJECTED')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

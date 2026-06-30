@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import type { Role, Status } from '../types'
 
-// Workflow-only actions (excludes audit-only 'create' | 'update')
-type WorkflowAction = 'submit' | 'start_review' | 'approve' | 'reject' | 'resubmit'
+type WorkflowAction = 'submit' | 'start_review' | 'approve' | 'reject' | 'return_for_changes' | 'resubmit'
+
+const COMMENT_REQUIRED: Set<WorkflowAction> = new Set(['reject', 'return_for_changes'])
 
 const ROLE_ACTIONS: Record<Role, Partial<Record<Status, WorkflowAction[]>>> = {
   submitter: {
@@ -11,30 +12,32 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Status, WorkflowAction[]>>> = {
   },
   reviewer: {
     SUBMITTED:    ['start_review'],
-    UNDER_REVIEW: ['approve', 'reject'],
+    UNDER_REVIEW: ['approve', 'return_for_changes', 'reject'],
   },
   admin: {
     DRAFT:        ['submit'],
     SUBMITTED:    ['start_review'],
-    UNDER_REVIEW: ['approve', 'reject'],
+    UNDER_REVIEW: ['approve', 'return_for_changes', 'reject'],
     REJECTED:     ['resubmit'],
   },
 }
 
 const ACTION_LABELS: Record<WorkflowAction, string> = {
-  submit:       'Submit Application',
-  start_review: 'Begin Review',
-  approve:      'Approve Registration',
-  reject:       'Reject Application',
-  resubmit:     'Resubmit Application',
+  submit:             'Submit Application',
+  start_review:       'Begin Review',
+  approve:            'Approve Registration',
+  reject:             'Reject Application',
+  return_for_changes: 'Return for Changes',
+  resubmit:           'Resubmit Application',
 }
 
 const ACTION_STYLE: Record<WorkflowAction, { color: string; border: string; bg: string }> = {
-  submit:       { color: '#818cf8', border: 'rgba(129,140,248,0.5)', bg: 'rgba(99,102,241,0.1)'  },
-  start_review: { color: '#fbbf24', border: 'rgba(251,191,36,0.4)', bg: 'rgba(251,191,36,0.08)' },
-  approve:      { color: '#4ade80', border: 'rgba(74,222,128,0.4)', bg: 'rgba(74,222,128,0.08)' },
-  reject:       { color: '#f87171', border: 'rgba(248,113,113,0.4)', bg: 'rgba(248,113,113,0.08)' },
-  resubmit:     { color: '#818cf8', border: 'rgba(129,140,248,0.5)', bg: 'rgba(99,102,241,0.1)'  },
+  submit:             { color: '#818cf8', border: 'rgba(129,140,248,0.5)', bg: 'rgba(99,102,241,0.1)'   },
+  start_review:       { color: '#fbbf24', border: 'rgba(251,191,36,0.4)',  bg: 'rgba(251,191,36,0.08)'  },
+  approve:            { color: '#4ade80', border: 'rgba(74,222,128,0.4)',  bg: 'rgba(74,222,128,0.08)'  },
+  reject:             { color: '#f87171', border: 'rgba(248,113,113,0.4)', bg: 'rgba(248,113,113,0.08)' },
+  return_for_changes: { color: '#fb923c', border: 'rgba(251,146,60,0.4)', bg: 'rgba(251,146,60,0.08)'  },
+  resubmit:           { color: '#818cf8', border: 'rgba(129,140,248,0.5)', bg: 'rgba(99,102,241,0.1)'   },
 }
 
 interface Props {
@@ -44,13 +47,21 @@ interface Props {
 }
 
 export function ActionButtons({ state, role, onAction }: Props) {
-  const [comment, setComment] = useState('')
-  const [pending, setPending] = useState<WorkflowAction | null>(null)
+  const [comment, setComment]       = useState('')
+  const [commentError, setCommentError] = useState('')
+  const [pending, setPending]       = useState<WorkflowAction | null>(null)
 
   const actions = ROLE_ACTIONS[role]?.[state] ?? []
   if (actions.length === 0) return null
 
+  const needsComment = actions.some(a => COMMENT_REQUIRED.has(a))
+
   const handle = async (action: WorkflowAction) => {
+    if (COMMENT_REQUIRED.has(action) && !comment.trim()) {
+      setCommentError('A comment is required for this action.')
+      return
+    }
+    setCommentError('')
     setPending(action)
     try {
       await onAction(action, comment)
@@ -72,14 +83,19 @@ export function ActionButtons({ state, role, onAction }: Props) {
         Next Step
       </p>
 
-      {state === 'UNDER_REVIEW' && (
-        <textarea
-          placeholder="Add notes for the applicant (optional)…"
-          value={comment}
-          onChange={e => setComment(e.target.value)}
-          rows={2}
-          style={{ marginBottom: 12, resize: 'vertical' }}
-        />
+      {needsComment && (
+        <div style={{ marginBottom: 12 }}>
+          <textarea
+            placeholder="Add notes for the applicant…"
+            value={comment}
+            onChange={e => { setComment(e.target.value); setCommentError('') }}
+            rows={2}
+            style={{ resize: 'vertical', borderColor: commentError ? 'var(--red)' : undefined }}
+          />
+          {commentError && (
+            <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 4 }}>{commentError}</p>
+          )}
+        </div>
       )}
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

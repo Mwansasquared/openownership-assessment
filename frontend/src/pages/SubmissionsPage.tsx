@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { submissionsApi } from '../api/submissions'
 import { useAuth } from '../hooks/useAuth'
 import { StatusBadge } from '../components/StatusBadge'
-import type { Role, Submission } from '../types'
+import { CATEGORIES } from '../types'
+import type { Role, Status, Submission } from '../types'
 
 // ── Date helper ───────────────────────────────────────────────────────────
 
@@ -22,23 +23,32 @@ function relativeDate(iso: string): string {
 // ── Create form ───────────────────────────────────────────────────────────
 
 function CreateForm({ onCreated }: { onCreated: (id: string) => void }) {
-  const [title, setTitle]     = useState('')
-  const [content, setContent] = useState('')
+  const [title, setTitle]                   = useState('')
+  const [content, setContent]               = useState('')
+  const [category, setCategory]             = useState('')
+  const [registrationDate, setRegistrationDate] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
 
   const submit = async () => {
-    if (!title.trim()) return
+    if (!title.trim()) { setError('Business name is required.'); return }
+    if (!category)     { setError('Category is required.');      return }
+    if (!registrationDate) { setError('Registration date is required.'); return }
     setLoading(true)
     setError('')
     try {
-      const sub = await submissionsApi.create(title.trim(), content)
+      const sub = await submissionsApi.create(title.trim(), content, category, registrationDate)
       onCreated(sub.id)
     } catch (err) {
       setError((err as Error).message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block', fontSize: 13, color: 'var(--text-secondary)',
+    marginBottom: 6, fontWeight: 500,
   }
 
   return (
@@ -57,10 +67,7 @@ function CreateForm({ onCreated }: { onCreated: (id: string) => void }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
-          <label style={{
-            display: 'block', fontSize: 13, color: 'var(--text-secondary)',
-            marginBottom: 6, fontWeight: 500,
-          }}>Business Name</label>
+          <label style={labelStyle}>Business Name <span style={{ color: 'var(--red)' }}>*</span></label>
           <input
             placeholder="Legal name of the business"
             value={title}
@@ -70,11 +77,44 @@ function CreateForm({ onCreated }: { onCreated: (id: string) => void }) {
           />
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={labelStyle}>Business Category <span style={{ color: 'var(--red)' }}>*</span></label>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                background: 'var(--input-bg, var(--panel-bg))',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                color: category ? 'var(--text-primary)' : 'var(--text-muted)',
+                fontSize: 14,
+              }}
+            >
+              <option value="" disabled>Select category…</option>
+              {CATEGORIES.map(c => (
+                <option key={c} value={c} style={{ textTransform: 'capitalize' }}>
+                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Registration Date <span style={{ color: 'var(--red)' }}>*</span></label>
+            <input
+              type="date"
+              value={registrationDate}
+              onChange={e => setRegistrationDate(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+
         <div>
-          <label style={{
-            display: 'block', fontSize: 13, color: 'var(--text-secondary)',
-            marginBottom: 6, fontWeight: 500,
-          }}>Business Description <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+          <label style={labelStyle}>Business Description <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
           <textarea
             placeholder="Describe the business, its activities, registered owners, and any other relevant details…"
             value={content}
@@ -108,6 +148,43 @@ function CreateForm({ onCreated }: { onCreated: (id: string) => void }) {
           {loading ? 'Creating…' : 'Start Application'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ── Status filter (reviewer / admin only) ─────────────────────────────────
+
+const FILTER_STATES: { label: string; value: Status | '' }[] = [
+  { label: 'All',          value: ''             },
+  { label: 'Submitted',    value: 'SUBMITTED'    },
+  { label: 'Under Review', value: 'UNDER_REVIEW' },
+  { label: 'Approved',     value: 'APPROVED'     },
+  { label: 'Rejected',     value: 'REJECTED'     },
+  { label: 'Draft',        value: 'DRAFT'        },
+]
+
+function StatusFilter({ value, onChange }: { value: Status | ''; onChange: (v: Status | '') => void }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+      {FILTER_STATES.map(f => (
+        <button
+          key={f.value}
+          onClick={() => onChange(f.value)}
+          style={{
+            padding: '5px 14px',
+            fontSize: 12,
+            fontWeight: 500,
+            borderRadius: 20,
+            border: '1px solid var(--border)',
+            background: value === f.value ? 'var(--accent)' : 'transparent',
+            color: value === f.value ? '#fff' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          {f.label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -160,7 +237,7 @@ function EmptyState({ role, onNew }: { role?: Role; onNew: () => void }) {
 
 function SubmissionRow({ sub, showOwner }: { sub: Submission; showOwner: boolean }) {
   const nav = useNavigate()
-  const cols = showOwner ? '1fr 180px 140px 90px' : '1fr 140px 90px'
+  const cols = showOwner ? '1fr 160px 120px 110px 90px' : '1fr 120px 110px 90px'
 
   return (
     <div
@@ -172,7 +249,6 @@ function SubmissionRow({ sub, showOwner }: { sub: Submission; showOwner: boolean
         borderTop: '1px solid var(--border)',
         cursor: 'pointer',
         transition: 'background 0.15s',
-        borderRadius: 0,
         gap: 12,
       }}
       onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
@@ -188,11 +264,14 @@ function SubmissionRow({ sub, showOwner }: { sub: Submission; showOwner: boolean
             color: 'var(--text-primary)',
             textDecoration: 'none',
             fontSize: 15, fontWeight: 450,
-            marginBottom: showOwner ? 2 : 0,
+            marginBottom: 2,
           }}
         >
           {sub.title}
         </Link>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+          {sub.category}
+        </span>
       </div>
 
       {showOwner && (
@@ -203,10 +282,11 @@ function SubmissionRow({ sub, showOwner }: { sub: Submission; showOwner: boolean
 
       <StatusBadge state={sub.state} />
 
-      <span style={{
-        fontSize: 13, color: 'var(--text-muted)',
-        fontVariantNumeric: 'tabular-nums',
-      }}>
+      <span style={{ fontSize: 13, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+        {sub.registration_date}
+      </span>
+
+      <span style={{ fontSize: 13, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
         {relativeDate(sub.updated_at)}
       </span>
     </div>
@@ -219,28 +299,30 @@ export function SubmissionsPage() {
   const { user } = useAuth()
   const nav = useNavigate()
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [stateFilter, setStateFilter] = useState<Status | ''>('')
   const [showCreate, setShowCreate]   = useState(false)
   const [error, setError]             = useState('')
 
-  useEffect(() => {
-    submissionsApi.list()
-      .then(setSubmissions)
-      .catch(err => setError((err as Error).message))
-  }, [])
-
-  const handleCreated = (id: string) => nav(`/submissions/${id}`)
-
   const canCreate  = user?.role !== 'reviewer'
   const showOwner  = user?.role === 'reviewer' || user?.role === 'admin'
-  const headerCols = showOwner ? '1fr 180px 140px 90px' : '1fr 140px 90px'
+  const canFilter  = showOwner
+
+  useEffect(() => {
+    submissionsApi.list(stateFilter || undefined)
+      .then(setSubmissions)
+      .catch(err => setError((err as Error).message))
+  }, [stateFilter])
+
+  const handleCreated = (id: string) => nav(`/submissions/${id}`)
+  const headerCols = showOwner ? '1fr 160px 120px 110px 90px' : '1fr 120px 110px 90px'
 
   return (
-    <div style={{ maxWidth: 780, margin: '0 auto', padding: '48px 24px' }}>
+    <div style={{ maxWidth: 860, margin: '0 auto', padding: '48px 24px' }}>
 
       {/* Page header */}
       <div className="fade-up" style={{
         display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', marginBottom: 32,
+        justifyContent: 'space-between', marginBottom: 24,
       }}>
         <div>
           <h1 style={{ fontSize: '1.375rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3 }}>
@@ -249,6 +331,7 @@ export function SubmissionsPage() {
           {submissions.length > 0 && (
             <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
               {submissions.length} {submissions.length === 1 ? 'application' : 'applications'}
+              {stateFilter ? ` · ${stateFilter.replace('_', ' ').toLowerCase()}` : ''}
             </p>
           )}
         </div>
@@ -266,12 +349,6 @@ export function SubmissionsPage() {
               cursor: 'pointer',
               transition: 'all 0.2s',
             }}
-            onMouseEnter={e => {
-              if (!showCreate) (e.currentTarget as HTMLElement).style.opacity = '0.88'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.opacity = '1'
-            }}
           >
             {showCreate ? '✕  Cancel' : '+ New Application'}
           </button>
@@ -279,6 +356,10 @@ export function SubmissionsPage() {
       </div>
 
       {showCreate && <CreateForm onCreated={handleCreated} />}
+
+      {canFilter && (
+        <StatusFilter value={stateFilter} onChange={setStateFilter} />
+      )}
 
       {error && (
         <div style={{
@@ -308,9 +389,10 @@ export function SubmissionsPage() {
             borderBottom: '1px solid var(--border)',
             gap: 12,
           }}>
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Business Name</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Business</span>
             {showOwner && <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Applicant</span>}
             <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Status</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Reg. Date</span>
             <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Updated</span>
           </div>
 

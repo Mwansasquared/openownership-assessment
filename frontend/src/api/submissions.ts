@@ -1,16 +1,17 @@
 import { api } from './client'
-import type { Action, Submission, SubmissionEvent } from '../types'
+import type { Action, Status, Submission, SubmissionEvent } from '../types'
 
 export const submissionsApi = {
-  list: () => api.get<Submission[]>('/submissions'),
+  list: (state?: Status) =>
+    api.get<Submission[]>(state ? `/submissions?state=${state}` : '/submissions'),
 
   get: (id: string) => api.get<Submission>(`/submissions/${id}`),
 
-  create: (title: string, content: string) =>
-    api.post<Submission>('/submissions', { title, content }),
+  create: (title: string, content: string, category: string, registrationDate: string) =>
+    api.post<Submission>('/submissions', { title, content, category, registration_date: registrationDate }),
 
-  update: (id: string, title: string, content: string) =>
-    api.put<Submission>(`/submissions/${id}`, { title, content }),
+  update: (id: string, title: string, content: string, category: string, registrationDate: string) =>
+    api.put<Submission>(`/submissions/${id}`, { title, content, category, registration_date: registrationDate }),
 
   delete: (id: string) => api.del(`/submissions/${id}`),
 
