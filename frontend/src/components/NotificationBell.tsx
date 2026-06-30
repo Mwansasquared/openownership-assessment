@@ -115,7 +115,7 @@ export function NotificationBell() {
         <div style={{
           position: 'absolute', top: 'calc(100% + 8px)', right: 0,
           width: 340,
-          background: 'var(--panel-bg)',
+          background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: 10,
           boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
