@@ -376,11 +376,11 @@ Frontend starts on `http://localhost:5173`. The Vite dev server proxies all `/ap
 
 Migration `004_seed_users.sql` inserts one user per role. All passwords are `password123`.
 
-| Email | Role |
-|---|---|
-| `applicant@example.com` | `submitter` |
-| `reviewer@example.com` | `reviewer` |
-| `admin@example.com` | `admin` |
+| Email | Password | Role |
+|---|---|---|
+| `applicant@example.com` | `password123` | `submitter` |
+| `reviewer@example.com` | `password123` | `reviewer` |
+| `admin@example.com` | `password123` | `admin` |
 
 The seed is idempotent — `ON CONFLICT (email) DO NOTHING` means re-running it is safe.
 
