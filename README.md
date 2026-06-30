@@ -20,6 +20,7 @@ This project is a full-stack application for submitting, tracking applications a
 - [Running Tests](#running-tests)
 - [Deployment](#deployment)
 - [Design Decisions](#design-decisions)
+- [Trade-offs & Future Improvements](#trade-offs--future-improvements)
 
 ---
 
@@ -60,10 +61,23 @@ The project shows a workflow were Business owners (**applicants**) create and ma
 ---
 
 ## Tools Used
-The tools used in developing this project are:
-- VS Code: was used to write, edit, debug the code and review the code.
-- PgAdmin: was used as a graphical user interface(GUI) for database management.
-- Claude: was used to scaffold, generate tests, debug, and partly scaffold the docs
+
+| Tool | How it was used |
+|---|---|
+| VS Code | Primary editor for writing, editing, and debugging code across the full stack |
+| PgAdmin | GUI for inspecting database state, verifying schema, and running ad-hoc queries during development |
+| Claude (Anthropic) | AI pair-programmer — see detail below |
+
+### AI assistance (Claude)
+
+Claude was used throughout the project as a pair-programmer rather than a code generator. Specific uses:
+
+- **Scaffolding** — generated the initial Go project layout (router wiring, middleware chain, handler skeletons) and React component shells so that structural decisions could be made up-front rather than evolved from scratch.
+- **Test generation** — produced the table-driven test cases in `state_managament_test.go`. The test matrix (valid transitions, illegal transitions, role/action combinations) was described in natural language and Claude translated it into idiomatic Go test code, which was then reviewed and adjusted.
+- **Debugging** — used to diagnose a `SameSite` cookie rejection in cross-origin production and a `pgx` connection-pool misconfiguration that caused idle-timeout errors.
+- **Documentation** — generated first drafts of the API reference table and the ASCII architecture diagram, which were then edited for accuracy.
+
+Every piece of generated code was read, understood, and either accepted, modified, or rejected before being committed. Claude was not used to write business logic or workflow rules — those were written by hand to ensure correctness.
 
 ## Architecture
 
@@ -326,7 +340,7 @@ go run main.go
 
 Server starts on `http://localhost:8080`.
 
-### 4. Start the frontend
+### 3. Start the frontend
 
 ```bash
 cd frontend
@@ -454,3 +468,40 @@ Storing the JWT in an `httpOnly` cookie means JavaScript cannot read or exfiltra
 ### Dark / light theme
 
 The frontend uses CSS custom properties on the `<html>` element (`data-theme="light"`) for instant, flicker-free theme switching. The chosen theme is persisted to `localStorage` and initialised from `prefers-color-scheme` on first visit, so users always get a comfortable default.
+
+---
+
+## Trade-offs & Future Improvements
+
+### Trade-offs made
+
+**`pgx` directly vs an ORM**
+Using `pgx` with raw SQL keeps the query layer explicit and fast, but requires writing more boilerplate (scan columns by hand, manage transactions manually). An ORM like GORM would reduce boilerplate at the cost of opaque queries and harder-to-predict behaviour under concurrent load. For a project where the query count is small and correctness matters, raw SQL was the right call.
+
+**In-process state machine vs database constraints**
+Workflow rules live entirely in Go (`workflow/state_managament.go`) rather than being enforced by database `CHECK` constraints or triggers. This makes the rules easy to unit-test without a database and trivial to extend, but means the database alone cannot reject an invalid transition if something bypasses the application layer. A `CHECK (state IN (...))` constraint on `submissions` was added as a safety net, but the authoritative enforcement is in Go.
+
+**JWT in `httpOnly` cookies vs `Authorization` headers**
+Cookies prevent XSS token theft but introduce a cross-origin complexity: `SameSite=None; Secure` is required in production, and the CORS config must explicitly allow credentials. A `localStorage`-based token would be simpler to implement but vulnerable to XSS. The security trade-off favours cookies.
+
+**No pagination**
+The submissions list endpoint returns all records for the authenticated user in a single response. This is fine for a demo but would not scale — a reviewer on a busy registry could see thousands of submissions.
+
+**Minimal router (Chi) vs a full framework**
+Chi was chosen for its lightweight composable middleware and idiomatic Go style. A heavier framework (Gin, Fiber) would provide more built-ins (validation, binding) but would also constrain the architecture more. For this scope, Chi kept things transparent.
+
+---
+
+### What I would add or change with more time
+
+| Area | Improvement |
+|---|---|
+| **Pagination & filtering** | Cursor-based pagination on `GET /submissions`, plus filter by state and date range |
+| **Refresh tokens** | Current JWTs expire after 24 hours with no renewal path — add a short-lived access token + long-lived refresh token stored as a separate `httpOnly` cookie |
+| **Email notifications** | Notify applicants when their application moves to `UNDER_REVIEW`, `APPROVED`, or `REJECTED` |
+| **Rate limiting** | Per-IP and per-user rate limits on auth endpoints to prevent brute-force attacks |
+| **Integration tests** | The workflow logic is unit-tested, but there are no tests that exercise the full HTTP → handler → repository → database path against a real test database |
+| **OpenAPI spec** | Auto-generate API documentation from code (e.g. with `swaggo/swag`) so the API contract is always up to date |
+| **File attachments** | Allow applicants to attach supporting documents (e.g. ID, proof of address) to a submission |
+| **Real-time updates** | Use Server-Sent Events or WebSockets so a reviewer's list view updates automatically when a new submission arrives, without polling |
+| **Audit log export** | Let admins download the full event history for a submission as CSV or PDF for compliance purposes |
