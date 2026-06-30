@@ -310,25 +310,7 @@ docker run -d --name pg \
   -p 5432:5432 postgres:16-alpine
 ```
 
-### 2. Run migrations
-
-```bash
-# Native PostgreSQL (uses your system user)
-psql openownership \
-  -f backend/migrations/001_create_users.sql \
-  -f backend/migrations/002_create_submissions.sql \
-  -f backend/migrations/003_create_submission_events.sql \
-  -f backend/migrations/004_seed_users.sql
-
-# Docker-based PostgreSQL
-psql "postgres://dev:dev@localhost:5432/openownership" \
-  -f backend/migrations/001_create_users.sql \
-  -f backend/migrations/002_create_submissions.sql \
-  -f backend/migrations/003_create_submission_events.sql \
-  -f backend/migrations/004_seed_users.sql
-```
-
-### 3. Configure and start the backend
+### 2. Configure and start the backend
 
 The backend auto-loads `backend/.env` on startup via `godotenv` — no need to set env vars in the shell command.
 
@@ -339,6 +321,8 @@ cp backend/.env.example backend/.env
 cd backend
 go run main.go
 ```
+
+#### Note: starting the Go backend server also runs migrations to create the database tables as well as seed users with roles.
 
 Server starts on `http://localhost:8080`.
 
@@ -402,16 +386,11 @@ PASS    github.com/openownership/assessment/internal/workflow
 |---|---|
 | `DATABASE_URL` | Provided automatically by the Railway PostgreSQL plugin |
 | `JWT_SECRET` | A long random string (`openssl rand -hex 32`) |
+| `FRONTEND_ORIGIN` | A url on which the frontend is running to allow cross-origin(the railway frontend url) |
 
 4. Run migrations against the Railway database:
 
-```bash
-psql "$DATABASE_URL" \
-  -f backend/migrations/001_create_users.sql \
-  -f backend/migrations/002_create_submissions.sql \
-  -f backend/migrations/003_create_submission_events.sql \
-  -f backend/migrations/004_seed_users.sql
-```
+Once the Go backend server is successfully deployed the migrations to create the database tables as well as seed users with roles are run.
 
 > The `DATABASE_URL` env var set in Railway is picked up automatically at runtime; `godotenv` only reads from `.env` when the file is present (it is not present in the Docker image).
 
@@ -423,12 +402,13 @@ psql "$DATABASE_URL" \
 
 | Variable | Value |
 |---|---|
-| `VITE_API_BASE_URL` | Your Railway backend URL, e.g. `https://backend-production-22d3.up.railway.app` |
+| `VITE_API_URL` | the Railway backend URL, e.g. `https://backend-production-22d3.up.railway.app` |
 
 The live frontend is deployed at [https://frontend-production-b018.up.railway.app](https://frontend-production-b018.up.railway.app).
 
 > **Cookie note**: In production the frontend and backend are on different origins, so the auth cookie must have `SameSite=SameSiteNoneMode; Secure` set in `auth_handler.go`. Railway provides HTTPS automatically.
 
+**See more documentation on deploying to[Railway](https://docs.railway.com/deployments/monorepo)**
 ---
 
 ## Design Decisions
@@ -445,7 +425,7 @@ RETURNING ...
 
 If another request already advanced the state, zero rows are returned and the handler responds with `409 Conflict`, preventing silent double-transitions.
 
-### State machine as the single source of truth
+### State management as the single source of truth
 
 `workflow.RoleCanAct` and `workflow.Transition` are called in the handler *before* any DB write:
 
