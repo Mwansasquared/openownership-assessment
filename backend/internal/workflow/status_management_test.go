@@ -43,6 +43,12 @@ func TestTransition(t *testing.T) {
 			wantNext: model.StateRejected,
 		},
 		{
+			name:     "under_review → draft via return_for_changes",
+			current:  model.StateUnderReview,
+			action:   model.ActionReturnForChanges,
+			wantNext: model.StateDraft,
+		},
+		{
 			name:     "rejected → submitted via resubmit",
 			current:  model.StateRejected,
 			action:   model.ActionResubmit,
@@ -75,6 +81,20 @@ func TestTransition(t *testing.T) {
 			name:      "cannot resubmit from under_review",
 			current:   model.StateUnderReview,
 			action:    model.ActionResubmit,
+			wantErr:   true,
+			errTarget: workflow.ErrInvalidTransition,
+		},
+		{
+			name:      "cannot return_for_changes from draft",
+			current:   model.StateDraft,
+			action:    model.ActionReturnForChanges,
+			wantErr:   true,
+			errTarget: workflow.ErrInvalidTransition,
+		},
+		{
+			name:      "cannot return_for_changes from approved",
+			current:   model.StateApproved,
+			action:    model.ActionReturnForChanges,
 			wantErr:   true,
 			errTarget: workflow.ErrInvalidTransition,
 		},
@@ -125,7 +145,7 @@ func TestAllowedActions(t *testing.T) {
 	}{
 		{model.StateDraft, []model.Action{model.ActionSubmit}},
 		{model.StateSubmitted, []model.Action{model.ActionStartReview}},
-		{model.StateUnderReview, []model.Action{model.ActionApprove, model.ActionReject}},
+		{model.StateUnderReview, []model.Action{model.ActionApprove, model.ActionReject, model.ActionReturnForChanges}},
 		{model.StateRejected, []model.Action{model.ActionResubmit}},
 		{model.StateApproved, []model.Action{}},
 		{model.State("BOGUS"), nil},
@@ -172,8 +192,12 @@ func TestRoleCanAct(t *testing.T) {
 		{model.RoleReviewer, model.ActionStartReview, true},
 		{model.RoleReviewer, model.ActionApprove, true},
 		{model.RoleReviewer, model.ActionReject, true},
+		{model.RoleReviewer, model.ActionReturnForChanges, true},
 		{model.RoleReviewer, model.ActionSubmit, false},
 		{model.RoleReviewer, model.ActionResubmit, false},
+
+		// Submitter cannot perform reviewer actions
+		{model.RoleSubmitter, model.ActionReturnForChanges, false},
 
 		// Admin can do everything
 		{model.RoleAdmin, model.ActionSubmit, true},
@@ -181,6 +205,7 @@ func TestRoleCanAct(t *testing.T) {
 		{model.RoleAdmin, model.ActionStartReview, true},
 		{model.RoleAdmin, model.ActionApprove, true},
 		{model.RoleAdmin, model.ActionReject, true},
+		{model.RoleAdmin, model.ActionReturnForChanges, true},
 	}
 
 	for _, tc := range tests {

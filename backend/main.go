@@ -62,11 +62,13 @@ func main() {
 
 	jwtSvc := auth.NewJWTService(jwtSecret, 24*time.Hour)
 
-	userRepo := repository.NewUserRepo(pool)
-	subRepo := repository.NewSubmissionRepo(pool)
+	userRepo  := repository.NewUserRepo(pool)
+	subRepo   := repository.NewSubmissionRepo(pool)
+	notifRepo := repository.NewNotificationRepo(pool)
 
-	authH := handler.NewAuthHandler(userRepo, jwtSvc)
-	subH := handler.NewSubmissionHandler(subRepo)
+	authH  := handler.NewAuthHandler(userRepo, jwtSvc)
+	subH   := handler.NewSubmissionHandler(subRepo, notifRepo)
+	notifH := handler.NewNotificationHandler(notifRepo)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -109,6 +111,10 @@ func main() {
 			// Submitter-only: create new submissions
 			r.With(auth.RequireRole(model.RoleSubmitter, model.RoleAdmin)).
 				Post("/submissions", subH.Create)
+
+			// Notifications
+			r.Get("/notifications", notifH.List)
+			r.Post("/notifications/read-all", notifH.MarkAllRead)
 		})
 	})
 

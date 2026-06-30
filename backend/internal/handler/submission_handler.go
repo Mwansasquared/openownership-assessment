@@ -3,7 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -14,26 +17,41 @@ import (
 )
 
 type SubmissionHandler struct {
-	subs *repository.SubmissionRepo
+	subs   repository.SubmissionRepository
+	notifs *repository.NotificationRepo
 }
 
-func NewSubmissionHandler(subs *repository.SubmissionRepo) *SubmissionHandler {
-	return &SubmissionHandler{subs: subs}
+func NewSubmissionHandler(subs repository.SubmissionRepository, notifs *repository.NotificationRepo) *SubmissionHandler {
+	return &SubmissionHandler{subs: subs, notifs: notifs}
 }
 
 // POST /api/submissions
 func (h *SubmissionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var body struct {
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Title            string `json:"title"`
+		Content          string `json:"content"`
+		Category         string `json:"category"`
+		RegistrationDate string `json:"registration_date"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Title == "" {
-		writeError(w, http.StatusBadRequest, "title and content are required")
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.Title == "" {
+		writeError(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	if !isValidCategory(body.Category) {
+		writeError(w, http.StatusBadRequest, "category must be one of: technology, retail, manufacturing, services, healthcare, finance, other")
+		return
+	}
+	if !isValidDate(body.RegistrationDate) {
+		writeError(w, http.StatusBadRequest, "registration_date is required and must be in YYYY-MM-DD format")
 		return
 	}
 
-	sub, err := h.subs.Create(r.Context(), claims.UserID, body.Title, body.Content)
+	sub, err := h.subs.Create(r.Context(), claims.UserID, body.Title, body.Content, body.Category, body.RegistrationDate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -50,7 +68,8 @@ func (h *SubmissionHandler) List(w http.ResponseWriter, r *http.Request) {
 		err  error
 	)
 	if claims.Role == model.RoleReviewer || claims.Role == model.RoleAdmin {
-		list, err = h.subs.ListAll(r.Context())
+		stateFilter := r.URL.Query().Get("state")
+		list, err = h.subs.ListAll(r.Context(), stateFilter)
 	} else {
 		list, err = h.subs.ListForUser(r.Context(), claims.UserID)
 	}
@@ -86,15 +105,29 @@ func (h *SubmissionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Title            string `json:"title"`
+		Content          string `json:"content"`
+		Category         string `json:"category"`
+		RegistrationDate string `json:"registration_date"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Title == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.Title == "" {
 		writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
+	if !isValidCategory(body.Category) {
+		writeError(w, http.StatusBadRequest, "category must be one of: technology, retail, manufacturing, services, healthcare, finance, other")
+		return
+	}
+	if !isValidDate(body.RegistrationDate) {
+		writeError(w, http.StatusBadRequest, "registration_date is required and must be in YYYY-MM-DD format")
+		return
+	}
 
-	updated, err := h.subs.UpdateDraft(r.Context(), sub.ID, claims.UserID, body.Title, body.Content)
+	updated, err := h.subs.UpdateDraft(r.Context(), sub.ID, claims.UserID, body.Title, body.Content, body.Category, body.RegistrationDate)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			writeError(w, http.StatusConflict, "submission is no longer in DRAFT")
@@ -156,14 +189,20 @@ func (h *SubmissionHandler) PerformAction(w http.ResponseWriter, r *http.Request
 
 	nextState, err := workflow.Transition(sub.State, action)
 	if err != nil {
-		writeError(w, http.StatusConflict, err.Error())
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
 	var body struct {
 		Comment string `json:"comment"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body) // comment is optional
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	// reject and return_for_changes require a non-empty comment.
+	if (action == model.ActionReject || action == model.ActionReturnForChanges) && strings.TrimSpace(body.Comment) == "" {
+		writeError(w, http.StatusBadRequest, "a comment is required when rejecting or returning for changes")
+		return
+	}
 
 	updated, err := h.subs.Transition(r.Context(), sub.ID, claims.UserID, action, sub.State, nextState, body.Comment)
 	if err != nil {
@@ -174,6 +213,13 @@ func (h *SubmissionHandler) PerformAction(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	if h.notifs != nil {
+		if err := h.notifs.CreateForTransition(r.Context(), updated, action); err != nil {
+			slog.Error("notification creation failed", "action", action, "submission_id", updated.ID, "err", err)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -221,4 +267,18 @@ func (h *SubmissionHandler) loadAndAuthorize(w http.ResponseWriter, r *http.Requ
 		return nil, false
 	}
 	return sub, true
+}
+
+func isValidCategory(c string) bool {
+	for _, v := range model.ValidCategories {
+		if v == c {
+			return true
+		}
+	}
+	return false
+}
+
+func isValidDate(d string) bool {
+	_, err := time.Parse("2006-01-02", d)
+	return err == nil
 }
