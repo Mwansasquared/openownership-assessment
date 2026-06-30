@@ -307,24 +307,46 @@ All routes are prefixed with `/api`. Authenticated routes require the `token` co
 
 ## Local Development
 
-### Prerequisites
+### Option A — Docker Compose (recommended)
+
+Brings up PostgreSQL and the backend together; only the frontend runs outside Docker.
+
+```bash
+docker compose up --build
+```
+
+The backend starts on `http://localhost:8080`. Migrations and seed users run automatically on startup.
+
+Then start the frontend separately:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend starts on `http://localhost:5173`. The Vite dev server proxies all `/api` requests to `http://localhost:8080`.
+
+### Option B — Run locally without Docker
+
+#### Prerequisites
 
 - Go 1.23+
 - Node.js 20+
 - PostgreSQL 14+
 
-### 1. Start PostgreSQL
+#### 1. Start PostgreSQL
 
 ```bash
 createdb openownership
 
-# Or with Docker
+# Or with Docker (database only)
 docker run -d --name pg \
   -e POSTGRES_USER=dev -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=openownership \
   -p 5432:5432 postgres:16-alpine
 ```
 
-### 2. Configure and start the backend
+#### 2. Configure and start the backend
 
 The backend auto-loads `backend/.env` on startup via `godotenv` — no need to set env vars in the shell command.
 
@@ -336,11 +358,9 @@ cd backend
 go run main.go
 ```
 
-#### Note: starting the Go backend server also runs migrations to create the database tables as well as seed users with roles.
+Migrations and seed users run automatically on startup. Server starts on `http://localhost:8080`.
 
-Server starts on `http://localhost:8080`.
-
-### 3. Start the frontend
+#### 3. Start the frontend
 
 ```bash
 cd frontend
