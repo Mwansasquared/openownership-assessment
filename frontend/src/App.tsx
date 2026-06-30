@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react
 import { AuthContext } from './hooks/useAuth'
 import { useTheme, type Theme } from './hooks/useTheme'
 import { authApi } from './api/auth'
+import { NotificationBell } from './components/NotificationBell'
 import { LoginPage } from './pages/LoginPage'
 import { SubmissionsPage } from './pages/SubmissionsPage'
 import { SubmissionDetailPage } from './pages/SubmissionDetailPage'
@@ -151,6 +152,7 @@ function Nav({ user, theme, onLogout, onToggleTheme }: {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+        {user && <NotificationBell />}
 
         {user ? (
           <>
