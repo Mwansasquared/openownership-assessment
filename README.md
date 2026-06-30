@@ -408,7 +408,7 @@ The live frontend is deployed at [https://frontend-production-b018.up.railway.ap
 
 > **Cookie note**: In production the frontend and backend are on different origins, so the auth cookie must have `SameSite=SameSiteNoneMode; Secure` set in `auth_handler.go`. Railway provides HTTPS automatically.
 
-**See more documentation on deploying to[Railway](https://docs.railway.com/deployments/monorepo)**
+**See more documentation on deploying to** [Railway](https://docs.railway.com/deployments/monorepo)
 ---
 
 ## Design Decisions
